@@ -8,7 +8,7 @@ import {
 
 const columns: GridColDef[] = [
   { field: 'address', headerName: 'Address', width: 400 },
-  { field: 'ens', headerName: 'Address', width: 400 },
+  { field: 'ens', headerName: 'ENS', width: 400 },
   {
     field: 'ethBalance',
     headerName: 'ETH Balance',
