@@ -6,10 +6,11 @@ import {
   Title,
   Button,
   Center,
+  Text,
 } from '@mantine/core';
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ethers } from 'ethers';
 import {
   removeDuplicate,
@@ -19,14 +20,22 @@ import {
   hasXETH,
   hasXETH_multicall,
 } from '../utils/helper';
-import { Column, Table } from 'react-virtualized';
-import 'react-virtualized/styles.css';
+import DataTable from '../components/DataGrid';
+import TokenModal from '../components/TokenModal';
+
+const CLEAN_UP_ADDRESS = 'CLEAN_UP_ADDRESS';
 const REMOVE_WHITESPACE = 'REMOVE_WHITESPACE';
 const REMOVE_DUPLICATE = 'REMOVE_DUPLICATE';
 const REMOVE_INVALID = 'REMOVE_INVALID';
 const RESOLVE_ENS = 'RESOLVE_ENS';
 const HASXETH = 'HASXETH';
 declare var window: any;
+
+type Item = {
+  address: string;
+  ens: string;
+  ethBalance: number;
+};
 
 const Home: NextPage = () => {
   let provider: any;
@@ -38,36 +47,30 @@ const Home: NextPage = () => {
       'https://eth-mainnet.g.alchemy.com/v2/2pdTZSj3sBYaKJllEXEwpXeOKY6XVwve'
     );
   }
-  const list = [
-    { name: 'Brian Vaughn', description: 'Software engineer' },
-    // And so on...
-  ];
+  const [outputList, setOutputList] = useState<string[]>([]);
+
   const [addressList, setAddressList] = useState('');
   const [actions, setActions] = useState<string[]>([
     REMOVE_WHITESPACE,
     REMOVE_DUPLICATE,
     REMOVE_INVALID,
   ]);
-  const [outputList, setOutputList] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [openModal, setOpenModal] = useState<boolean>(false);
+
   const processList = async (addressList, actions) => {
     setLoading(true);
     let processedList = addressList.split('\n');
-    if (actions.includes(REMOVE_DUPLICATE)) {
-      processedList = removeDuplicate(processedList);
-    }
-    if (actions.includes(REMOVE_WHITESPACE)) {
-      processedList = removeWhitespace(processedList);
-    }
-    if (actions.includes(REMOVE_INVALID)) {
-      processedList = removeInvalidAddress(processedList);
-    }
-    if (actions.includes(RESOLVE_ENS)) {
-      processedList = await resolveENS(processedList, provider);
-    }
-    if (actions.includes(HASXETH)) {
-      processedList = await hasXETH_multicall(processedList, 0, provider);
-    }
+    processedList = removeWhitespace(processedList);
+    processedList = removeDuplicate(processedList);
+    processedList = removeInvalidAddress(processedList);
+    console.log('here1', processedList);
+
+    processedList = await resolveENS(processedList, provider);
+    // if (actions.includes(HASXETH)) {
+    processedList = await hasXETH_multicall(processedList, 0, provider);
+    // }
+    console.log('here2', processedList);
     setOutputList(processedList);
     setLoading(false);
   };
@@ -105,22 +108,6 @@ const Home: NextPage = () => {
         />
         <Center>
           <Stack>
-            <CheckboxGroup
-              defaultValue={[REMOVE_DUPLICATE]}
-              label='Select actions'
-              // description=''
-              value={actions}
-              onChange={setActions}
-              required
-            >
-              <Checkbox value={REMOVE_INVALID} label='Remove Invalid Address' />
-              <Checkbox value={REMOVE_DUPLICATE} label='Remove Duplicate' />
-              <Checkbox value={REMOVE_WHITESPACE} label='Remove White Space' />
-              <Checkbox value={RESOLVE_ENS} label='Convert ENS' />
-              <Checkbox value={HASXETH} label='Has ETH Balance' />
-              <Checkbox value='Has Activity' label='Has Activity' />
-            </CheckboxGroup>
-
             {/* <div style={{ width: 200 }}> */}
             <Button
               fullWidth={true}
@@ -129,33 +116,26 @@ const Home: NextPage = () => {
             >
               Process
             </Button>
+
+            {/* <Button
+              fullWidth={true}
+              onClick={() => setOpenModal(true)}
+              // loading={loading}
+            >
+              Add Token
+            </Button> */}
             {/* </div> */}
           </Stack>
         </Center>
-        <Textarea
-          placeholder='0x'
-          label='Addresses'
-          value={outputList.join('\n')}
-          description={
-            outputList
-              ? `Total number of Addresses = ${outputList.length}`
-              : null
-          }
-          minRows={10}
-          maxRows={10}
-        />
-        {/* <Table
-          width={1000}
-          height={300}
-          headerHeight={20}
-          rowHeight={30}
-          rowCount={outputList.length}
-          rowGetter={({ index }) => outputList[index]}
-        >
-          <Column label='Address' dataKey='address' width={800} />
-          <Column width={200} label='Balance' dataKey='balance' />
-        </Table>*/}
+        <Text>Addresses</Text>
+        <Text>
+          {outputList
+            ? `Total number of Addresses = ${outputList.length}`
+            : null}
+        </Text>
+        <DataTable data={outputList} />
       </Stack>
+      <TokenModal opened={openModal} setOpened={setOpenModal} />
     </>
   );
 };

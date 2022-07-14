@@ -5,7 +5,7 @@ import {
   ContractCallContext,
 } from 'ethereum-multicall';
 import MulticalABI from '../abis/multicall.json';
-
+const ETH_MULTICALL_ADDRESS = '0xeefba1e63905ef1d7acba5a8513c70307c1ce441';
 export const removeDuplicate = (list: string[]): string[] => {
   return [...new Set(list)];
 };
@@ -21,19 +21,33 @@ export const removeInvalidAddress = (list: string[]): string[] => {
       (ethers.utils.isAddress(line) || line.toLowerCase().endsWith('.eth'))
   );
 };
-
-export const resolveENS = async (list: string[], provider: any) => {
+export const removeInvalidAddressObj = (list: any[]): string[] => {
+  return list.filter(
+    (line) =>
+      line &&
+      line.address &&
+      (ethers.utils.isAddress(line.address) ||
+        line.address.toLowerCase().endsWith('.eth'))
+  );
+};
+export const resolveENS = async (list: any[], provider: any) => {
   let processedList = await Promise.all(
     list.map(async (line) => {
       if (line.toLowerCase().endsWith('.eth')) {
-        return await provider.resolveName(line);
+        const resolvedAddress = await provider.resolveName(line);
+        return { address: resolvedAddress, ens: line };
       } else {
-        return line;
+        return { address: line, ens: null };
       }
     })
   );
   //Some invalid .eth address could resolve to null
-  processedList = removeInvalidAddress(processedList);
+  processedList.forEach((line) => {
+    if (line && !line.address) {
+      console.log('line', line);
+    }
+  });
+  processedList = removeInvalidAddressObj(processedList);
   return processedList;
 };
 
@@ -60,41 +74,58 @@ export const hasXETH = async (
 };
 
 export const hasXETH_multicall = async (
-  list: string[],
+  list: any[],
   amount: number,
   provider: any
 ) => {
   const multicall_num = 1000;
   const multicall_group = [];
   while (list.length > multicall_num) {
-    multicall_group.push(multicall(list.splice(0, multicall_num), provider));
+    multicall_group.push(
+      multicall(
+        list.splice(0, multicall_num),
+        provider,
+        ETH_MULTICALL_ADDRESS,
+        'getEthBalance'
+      )
+    );
   }
-  multicall_group.push(multicall(list, provider));
+  multicall_group.push(
+    multicall(list, provider, ETH_MULTICALL_ADDRESS, 'getEthBalance')
+  );
 
   let multicall_res = await Promise.all(multicall_group);
   var balances = multicall_res.reduce(function (a, b) {
     return a.concat(b);
   });
 
-  balances = balances.filter((item) => Number(item.balance) > 100);
-  return balances.map((item) => item.address);
+  console.log('balances', balances);
+  balances = balances.filter((item) => Number(item.ethBalance) > amount);
+  // return balances.map((item) => item.address);
+  return balances; //.map((item) => item.address);
 };
 
-export const multicall = async (list: string[], provider: any) => {
+export const multicall = async (
+  list: any[],
+  provider: any,
+  contractAddress: string,
+  methodName: string
+) => {
   const multicall = new Multicall({
     ethersProvider: provider,
     tryAggregate: true,
   });
 
-  const contractCallContext = list.map((address, index) => {
+  const contractCallContext = list.map((item) => {
+    let address = item.address;
     return {
       reference: address,
-      contractAddress: '0xeefba1e63905ef1d7acba5a8513c70307c1ce441',
+      contractAddress: contractAddress,
       abi: MulticalABI,
       calls: [
         {
           reference: address,
-          methodName: 'getEthBalance',
+          methodName: methodName,
           methodParameters: [address],
         },
       ],
@@ -104,13 +135,28 @@ export const multicall = async (list: string[], provider: any) => {
   const balances = await multicall.call(contractCallContext);
   let hexBalances = [];
 
-  for (const item of Object.entries(balances.results)) {
-    let balanceHex = item[1].callsReturnContext[0].returnValues[0].hex;
+  // console.log('balances.results', balances.results);
+  // for (const item of Object.entries(balances.results)) {
+  //   let balanceHex = item[1].callsReturnContext[0].returnValues[0].hex;
+  //   let address = item[1].callsReturnContext[0].reference;
+  //   hexBalances.push({
+  //     address: address,
+  //     ethBalance: Number(ethers.utils.formatEther(balanceHex)),
+  //   });
+  // }
+
+  Object.entries(balances.results).forEach(([address, item], index) => {
+    console.log('TEST', address, item);
+    let balanceHex = item.callsReturnContext[0].returnValues[0].hex;
+    // let address = callsReturnContext[0].reference;
     hexBalances.push({
-      address: item[1].callsReturnContext[0].reference,
-      balance: Number(ethers.utils.formatEther(balanceHex)),
+      address: address,
+      ethBalance: Number(ethers.utils.formatEther(balanceHex)),
+      ens: list[index].ens,
     });
-  }
+  });
+
+  console.log('hexBalances', hexBalances);
   return hexBalances;
 };
 
