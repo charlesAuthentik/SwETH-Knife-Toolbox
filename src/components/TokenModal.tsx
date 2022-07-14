@@ -1,4 +1,4 @@
-import React, { forwardRef, ItemProps } from 'react';
+import React, { forwardRef } from 'react';
 import { Avatar, Button, Group, Modal, Select, Text } from '@mantine/core';
 import { useTokenList } from '@usedapp/core';
 
@@ -14,6 +14,13 @@ const ETHER = {
   logoURI:
     'https://assets.coingecko.com/coins/images/279/small/ethereum.png?1595348880',
 };
+
+interface ItemProps extends React.ComponentPropsWithoutRef<'div'> {
+  logoURI: string;
+  label: string;
+  description: string;
+}
+
 const SelectItem = forwardRef<HTMLDivElement, ItemProps>(
   ({ logoURI, label, ...others }: ItemProps, ref) => (
     <div ref={ref} {...others}>
@@ -34,7 +41,8 @@ const TokenModal = ({ opened, setOpened }) => {
     label: token.name,
     value: token.address,
   }));
-  tokensData = [ETHER].concat(tokensData || []);
+  // tokensData = [ETHER].concat(tokensData);
+  tokensData = tokensData?.concat(ETHER);
   console.log(tokens);
   return tokensData ? (
     <>

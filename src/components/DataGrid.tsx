@@ -8,7 +8,7 @@ import {
 
 const columns: GridColDef[] = [
   { field: 'address', headerName: 'Address', width: 400 },
-  { field: 'ens', headerName: 'ENS', width: 400 },
+  { field: 'ens', headerName: 'Address', width: 400 },
   {
     field: 'ethBalance',
     headerName: 'ETH Balance',
@@ -17,7 +17,7 @@ const columns: GridColDef[] = [
   },
 ];
 
-export default function DataTable({ data }) {
+export default function DataTable({ data }: { data: any }) {
   console.log('Table', data);
   return (
     <div style={{ height: 400, width: '100%' }}>
