@@ -6,25 +6,20 @@ import {
   GridValueGetterParams,
 } from '@mui/x-data-grid';
 
-const columns: GridColDef[] = [
-  { field: 'address', headerName: 'Address', width: 400 },
-  { field: 'ens', headerName: 'ENS', width: 400 },
-  {
-    field: 'ethBalance',
-    headerName: 'ETH Balance',
-    type: 'number',
-    width: 130,
-  },
-];
-
-export default function DataTable({ data }: { data: any }) {
+export default function DataTable({
+  data,
+  columns,
+}: {
+  data: any;
+  columns: GridColDef[];
+}) {
   console.log('Table', data);
   return (
-    <div style={{ height: 400, width: '100%' }}>
+    <div style={{ height: 500, width: '100%' }}>
       <DataGrid
         rows={data}
         columns={columns}
-        pageSize={25}
+        // pageSize={25}
         rowsPerPageOptions={[5, 25, 50, 100]}
         checkboxSelection
         getRowId={(row) => row.address}

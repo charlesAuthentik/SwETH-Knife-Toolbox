@@ -1,11 +1,16 @@
 import { ethers } from 'ethers';
-import {
-  Multicall,
-  ContractCallResults,
-  ContractCallContext,
-} from 'ethereum-multicall';
+import { Multicall } from 'ethereum-multicall';
 import MulticalABI from '../abis/multicall.json';
+import ERC20ABI from '../abis/erc20.json';
 const ETH_MULTICALL_ADDRESS = '0xeefba1e63905ef1d7acba5a8513c70307c1ce441';
+import { Item } from './types';
+type Token = {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+};
+
 export const removeDuplicate = (list: string[]): string[] => {
   return [...new Set(list)];
 };
@@ -30,14 +35,15 @@ export const removeInvalidAddressObj = (list: any[]): string[] => {
         line.address.toLowerCase().endsWith('.eth'))
   );
 };
-export const resolveENS = async (list: any[], provider: any) => {
+export const resolveENS = async (list: Item[], provider: any) => {
   let processedList = await Promise.all(
-    list.map(async (line) => {
-      if (line.toLowerCase().endsWith('.eth')) {
-        const resolvedAddress = await provider.resolveName(line);
-        return { address: resolvedAddress, ens: line };
+    list.map(async (item) => {
+      const address = item.address;
+      if (address.toLowerCase().endsWith('.eth')) {
+        const resolvedAddress = await provider.resolveName(address);
+        return { ...item, address: resolvedAddress, ens: address };
       } else {
-        return { address: line, ens: null };
+        return item;
       }
     })
   );
@@ -48,51 +54,47 @@ export const resolveENS = async (list: any[], provider: any) => {
     }
   });
   processedList = removeInvalidAddressObj(processedList);
+  console.log('resolveENS', processedList);
   return processedList;
 };
 
-export const hasXETH = async (
-  list: string[],
-  amount: number,
-  provider: any
-) => {
-  let processedList;
-  let count = 0;
-
-  processedList = await Promise.all(
-    list.map(async (line, index) => {
-      const balance = await provider.getBalance(line);
-      count++;
-      return { address: line, ethBalance: ethers.utils.formatEther(balance) };
+export const lookupENS = async (list: Item[], provider: any) => {
+  let processedList = await Promise.all(
+    list.map(async (item) => {
+      if (!item.ens) {
+        const ensName = await provider.lookupAddress(item.address);
+        return { ...item, ens: ensName };
+      } else {
+        return item;
+      }
     })
   );
 
-  processedList = processedList.filter(
-    (item) => Number(item.ethBalance) > amount
-  );
-  return processedList.map((item) => item.address);
+  //Some invalid .eth address could resolve to null
+  processedList.forEach((line) => {
+    if (line && !line.address) {
+      console.log('line', line);
+    }
+  });
+  // processedList = removeInvalidAddressObj(processedList);
+  console.log('lookupENS', processedList);
+
+  return processedList;
 };
 
-export const hasXETH_multicall = async (
-  list: any[],
-  amount: number,
-  provider: any
+export const groupMulticall = async (
+  list: Item[],
+  provider: any,
+  token: Token
 ) => {
   const multicall_num = 1000;
   const multicall_group = [];
   while (list.length > multicall_num) {
     multicall_group.push(
-      multicall(
-        list.splice(0, multicall_num),
-        provider,
-        ETH_MULTICALL_ADDRESS,
-        'getEthBalance'
-      )
+      multicall(list.splice(0, multicall_num), provider, token)
     );
   }
-  multicall_group.push(
-    multicall(list, provider, ETH_MULTICALL_ADDRESS, 'getEthBalance')
-  );
+  multicall_group.push(multicall(list, provider, token));
 
   let multicall_res = await Promise.all(multicall_group);
   var balances = multicall_res.reduce(function (a, b) {
@@ -100,17 +102,26 @@ export const hasXETH_multicall = async (
   });
 
   console.log('balances', balances);
-  balances = balances.filter((item) => Number(item.ethBalance) > amount);
+  // balances = balances.filter((item) => Number(item.ethBalance) > amount);
   // return balances.map((item) => item.address);
   return balances; //.map((item) => item.address);
 };
 
-export const multicall = async (
-  list: any[],
-  provider: any,
-  contractAddress: string,
-  methodName: string
-) => {
+export const multicall = async (list: Item[], provider: any, token: Token) => {
+  let contractAddress;
+  let methodName;
+  let abi;
+  let balanceName = token.symbol + 'Balance';
+  if (token.address === '0x0000000000000000000000000000000000000000') {
+    contractAddress = ETH_MULTICALL_ADDRESS;
+    methodName = 'getEthBalance';
+    abi = MulticalABI;
+  } else {
+    contractAddress = token.address;
+    methodName = 'balanceOf';
+    abi = ERC20ABI;
+  }
+  console.log('contractAddress', contractAddress, methodName, balanceName);
   const multicall = new Multicall({
     ethersProvider: provider,
     tryAggregate: true,
@@ -121,7 +132,7 @@ export const multicall = async (
     return {
       reference: address,
       contractAddress: contractAddress,
-      abi: MulticalABI,
+      abi: abi,
       calls: [
         {
           reference: address,
@@ -133,31 +144,19 @@ export const multicall = async (
   });
 
   const balances = await multicall.call(contractCallContext);
-  let hexBalances = [];
 
-  // console.log('balances.results', balances.results);
-  // for (const item of Object.entries(balances.results)) {
-  //   let balanceHex = item[1].callsReturnContext[0].returnValues[0].hex;
-  //   let address = item[1].callsReturnContext[0].reference;
-  //   hexBalances.push({
-  //     address: address,
-  //     ethBalance: Number(ethers.utils.formatEther(balanceHex)),
-  //   });
-  // }
-
+  let balance_dict = {};
   Object.entries(balances.results).forEach(([address, item], index) => {
-    console.log('TEST', address, item);
     let balanceHex = item.callsReturnContext[0].returnValues[0].hex;
-    // let address = callsReturnContext[0].reference;
-    hexBalances.push({
-      address: address,
-      ethBalance: Number(ethers.utils.formatEther(balanceHex)),
-      ens: list[index].ens,
-    });
+    balance_dict[address] = Number(
+      ethers.utils.formatUnits(balanceHex, token.decimals)
+    );
+  });
+  let processedList = list.map((item, index) => {
+    return { ...item, [balanceName]: balance_dict[item.address] };
   });
 
-  console.log('hexBalances', hexBalances);
-  return hexBalances;
+  return processedList;
 };
 
 // processedList = processedList.filter((n) => n);

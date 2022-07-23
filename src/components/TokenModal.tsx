@@ -2,19 +2,6 @@ import React, { forwardRef } from 'react';
 import { Avatar, Button, Group, Modal, Select, Text } from '@mantine/core';
 import { useTokenList } from '@usedapp/core';
 
-const UNI_LIST = 'https://gateway.ipfs.io/ipns/tokens.uniswap.org'; //Todo: Website will crash if this link is not reachable. Add checker
-const ETHER = {
-  label: 'Ether',
-  value: '0x0000000000000000000000000000000000000000',
-  chainId: 1,
-  address: '0x0000000000000000000000000000000000000000',
-  name: 'Ether',
-  symbol: 'ETH',
-  decimals: 18,
-  logoURI:
-    'https://assets.coingecko.com/coins/images/279/small/ethereum.png?1595348880',
-};
-
 interface ItemProps extends React.ComponentPropsWithoutRef<'div'> {
   logoURI: string;
   label: string;
@@ -34,16 +21,14 @@ const SelectItem = forwardRef<HTMLDivElement, ItemProps>(
   )
 );
 
-const TokenModal = ({ opened, setOpened }) => {
-  let { tokens } = useTokenList(UNI_LIST, 1) || {};
-  let tokensData = tokens?.map((token) => ({
-    ...token,
-    label: token.name,
-    value: token.address,
-  }));
-  // tokensData = [ETHER].concat(tokensData);
-  tokensData = tokensData?.concat(ETHER);
-  console.log(tokens);
+const TokenModal = ({
+  opened,
+  setOpened,
+  value,
+  setValue,
+  queryToken,
+  tokensData,
+}) => {
   return tokensData ? (
     <>
       <Modal
@@ -80,8 +65,17 @@ const TokenModal = ({ opened, setOpened }) => {
           searchable
           itemComponent={SelectItem}
           data={tokensData}
+          value={value}
+          onChange={setValue}
         ></Select>
-        <Button>Confirm</Button>
+        <Button
+          onClick={() => {
+            queryToken();
+            setOpened(false);
+          }}
+        >
+          Confirm
+        </Button>
       </Modal>
     </>
   ) : (
